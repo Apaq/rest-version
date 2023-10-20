@@ -25,7 +25,7 @@
         <repository>
             <id>github</id>
             <name>Github Packages</name>
-            <url>https://maven.pkg.github.com/Apaq/rest-patch</url>
+            <url>https://maven.pkg.github.com/Apaq/rest-version</url>
         </repository>
     </distributionManagement>
 
@@ -85,9 +85,9 @@
 
 
     <scm>
-        <connection>scm:git:https://github.com/apaq/rest-patch.git</connection>
-        <developerConnection>scm:git:git@github.com:apaq/rest-patch.git</developerConnection>
-        <url>https://github.com/apaq/rest-patch</url>
+        <connection>scm:git:https://github.com/apaq/rest-version.git</connection>
+        <developerConnection>scm:git:git@github.com:apaq/rest-version.git</developerConnection>
+        <url>https://github.com/apaq/rest-version</url>
       <tag>HEAD</tag>
   </scm>
 </project>

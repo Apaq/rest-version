@@ -1,4 +1,4 @@
-# rest-patch
+# rest-version
 
 This library provides versioning for requests in Spring-based RESTFUL webservices. 
 
