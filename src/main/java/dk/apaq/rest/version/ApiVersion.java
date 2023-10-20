@@ -61,21 +61,13 @@ public class ApiVersion {
     public static ApiVersion from(String version) {
         try {
             ApiVersion apiVersion;
-            if(version.equals("1.*") || version.startsWith("1.0")) {
-                apiVersion = from(Versions.V20200101);
-            } else if(version.startsWith("1.1")) {
-                apiVersion = from(Versions.V20200526);
-            } else if(version.startsWith("1.2")) {
-                apiVersion = from(Versions.V20200925);
-            } else {
-                LocalDate date = LocalDate.parse(version);
-                apiVersion = getFirstVersion();
-                for(ApiVersion current : VERSIONS) {
-                    if(current.getVersionDate().isAfter(date)) {
-                        break;
-                    }
-                    apiVersion = current;
+            LocalDate date = LocalDate.parse(version);
+            apiVersion = getFirstVersion();
+            for(ApiVersion current : VERSIONS) {
+                if(current.getVersionDate().isAfter(date)) {
+                    break;
                 }
+                apiVersion = current;
             }
             return apiVersion;
         } catch (Exception ex) {
