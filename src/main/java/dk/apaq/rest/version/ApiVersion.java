@@ -31,6 +31,15 @@ public class ApiVersion {
      * Registers a new API version.
      *
      * @param version        The ApiVersion object to register.
+     */
+    public static void registerVersion(ApiVersion version) {
+        ApiVersion.registerVersion(version, false);
+    }
+
+    /**
+     * Registers a new API version.
+     *
+     * @param version        The ApiVersion object to register.
      * @param defaultVersion Whether this version should be the default version.
      */
     public static void registerVersion(ApiVersion version, boolean defaultVersion) {

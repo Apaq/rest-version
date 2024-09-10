@@ -8,7 +8,14 @@ This project adds support for versioning Spring MVC resources so that multiple c
 served for different versions of the API. It makes it possible to make breaking changes to a REST api, while still 
 supporting clients that uses the old version of the API.
 
-The version must be an ISO date (fx. '2022-12-31'). The version must be specified via the header `Api-Version`.
+The version must be an ISO date (fx. '2022-12-31'). The version must be specified via the header `Api-Version`. 
+
+Also, all supported versions must be registered via ApiVersion like this:
+```
+ApiVersion.registerVersion(new ApiVersion("2024-01-01"));
+ApiVersion.registerVersion(new ApiVersion("2023-02-01"));
+ApiVersion.registerVersion(new ApiVersion("2023-01-01"));
+```
 
 ### Example
 The following examples show how to have 2 controllers mapped to the same path return different models based on the version
