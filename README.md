@@ -46,4 +46,3 @@ public class CatController {
     public List<CatV2> getCats() { ... }
 }
 ```
-
