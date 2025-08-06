@@ -1,5 +1,7 @@
 package dk.apaq.rest.version;
 
+import org.springframework.core.annotation.AliasFor;
+import org.springframework.web.bind.annotation.Mapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.lang.annotation.ElementType;
@@ -16,7 +18,7 @@ import java.lang.annotation.Target;
  * at both the class level (for a controller) and method level.
  */
 @RequestMapping
-@Target({ElementType.METHOD, ElementType.TYPE})
+@Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ApiVersionedResource {
 
@@ -26,4 +28,11 @@ public @interface ApiVersionedResource {
      * @return The version date for the API resource.
      */
     String version();
+
+    /**
+     * Optional additional path appended after the version
+     */
+    @AliasFor(annotation = RequestMapping.class, attribute = "path")
+    String path() default "";
+
 }
