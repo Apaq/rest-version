@@ -3,6 +3,8 @@ package dk.apaq.rest.version;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.condition.RequestCondition;
 
 import java.lang.reflect.Method;
@@ -53,10 +55,27 @@ class ApiVersionedRequestMappingTest {
 
 
     // Mock controller with ApiVersionedResource annotation
+    @RequestMapping("/mocks")
     @ApiVersionedResource(version = "2023-01-01")
     private static class MockControllerV1 {
 
+        @GetMapping
+        public String get() {
+            return "mockv1";
+        }
     }
+
+    // Mock controller with ApiVersionedResource annotation
+    @RequestMapping("/mocks")
+    @ApiVersionedResource(version = "2024-01-01")
+    private static class MockControllerV2 {
+
+        @GetMapping
+        public String get() {
+            return "mockv2";
+        }
+    }
+
 
     // Mock controller without ApiVersionedResource annotation
     private static class NonAnnotatedController {
