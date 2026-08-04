@@ -102,4 +102,64 @@ class ApiVersionTest {
         assertEquals("2021-12-01", versions.get(0).getVersion());
         assertEquals("2022-06-01", versions.get(1).getVersion());
     }
+
+    @Test
+    void testSetDefaultVersion() {
+        ApiVersion version1 = new ApiVersion("2023-01-01");
+        ApiVersion version2 = new ApiVersion("2024-01-01");
+
+        ApiVersion.registerVersion(version1, false);
+        ApiVersion.registerVersion(version2, false);
+        ApiVersion.setDefaultVersion(version2);
+
+        assertEquals(version2, ApiVersion.getDefaultVersion());
+    }
+
+    @Test
+    void testSetDefaultVersion_notRegistered() {
+        ApiVersion version1 = new ApiVersion("2023-01-01");
+        ApiVersion.registerVersion(version1, false);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> ApiVersion.setDefaultVersion(new ApiVersion("2024-01-01")));
+        assertEquals("Version '2024-01-01' is not registered", exception.getMessage());
+    }
+
+    @Test
+    void testRegisterDuplicateVersion() {
+        ApiVersion.registerVersion(new ApiVersion("2023-01-01"), false);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> ApiVersion.registerVersion(new ApiVersion("2023-01-01"), false));
+        assertEquals("Version '2023-01-01' is already registered", exception.getMessage());
+    }
+
+    @Test
+    void testRegisterNullVersion() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> ApiVersion.registerVersion(null, false));
+        assertEquals("Version must not be null", exception.getMessage());
+    }
+
+    @Test
+    void testFromUnparseableHeaderReturnsDefault() {
+        ApiVersion version1 = new ApiVersion("2023-01-01");
+        ApiVersion.registerVersion(version1, true);
+
+        ApiVersion result = ApiVersion.from("not-a-date");
+        assertEquals(version1, result);
+    }
+
+    @Test
+    void testFromIsIndependentOfRegistrationOrder() {
+        ApiVersion version1 = new ApiVersion("2023-01-01");
+        ApiVersion version2 = new ApiVersion("2023-06-01");
+
+        // Register out of chronological order on purpose
+        ApiVersion.registerVersion(version2, false);
+        ApiVersion.registerVersion(version1, false);
+
+        ApiVersion result = ApiVersion.from("2023-04-01");
+        assertEquals(version1, result);
+    }
 }

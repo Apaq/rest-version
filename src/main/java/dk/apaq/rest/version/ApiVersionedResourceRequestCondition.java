@@ -6,6 +6,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.condition.AbstractRequestCondition;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 /**
@@ -15,7 +17,7 @@ import java.util.*;
  */
 public class ApiVersionedResourceRequestCondition extends AbstractRequestCondition<ApiVersionedResourceRequestCondition> {
 
-    // Header key used to specify API version in the request.
+    // Default header key used to specify API version in the request.
     public static final String HEADER_VERSION = "Api-Version";
 
     // Logger for this class.
@@ -24,13 +26,19 @@ public class ApiVersionedResourceRequestCondition extends AbstractRequestConditi
     // Set of supported API versions for the condition.
     private final Set<ApiVersion> versions;
 
+    // Header key used to specify the API version in the request.
+    private final String headerName;
+
+    // Whether this condition was declared at method level, in which case it overrides the type-level condition.
+    private final boolean fromMethod;
+
     /**
      * Constructor that accepts a single API version.
      *
      * @param version The version string to initialize the condition.
      */
     public ApiVersionedResourceRequestCondition(String version) {
-        this(Collections.singletonList(version));
+        this(Collections.singletonList(version), false, HEADER_VERSION);
     }
 
     /**
@@ -39,7 +47,7 @@ public class ApiVersionedResourceRequestCondition extends AbstractRequestConditi
      * @param versions The collection of version strings to initialize the condition.
      */
     public ApiVersionedResourceRequestCondition(Collection<String> versions) {
-        this.versions = Collections.unmodifiableSet(toVersionSet(versions));
+        this(versions, false, HEADER_VERSION);
     }
 
     /**
@@ -48,26 +56,72 @@ public class ApiVersionedResourceRequestCondition extends AbstractRequestConditi
      * @param versions The set of {@link ApiVersion} objects to initialize the condition.
      */
     public ApiVersionedResourceRequestCondition(Set<ApiVersion> versions) {
-        this.versions = Collections.unmodifiableSet(versions);
+        this(versions, false, HEADER_VERSION);
     }
 
     /**
-     * Combines this condition with another condition by merging their version sets.
+     * Constructor that accepts a set of {@link ApiVersion} objects and a flag indicating
+     * whether the condition was declared at method level.
+     *
+     * @param versions   The set of {@link ApiVersion} objects to initialize the condition.
+     * @param fromMethod Whether this condition originates from a method-level annotation.
+     */
+    public ApiVersionedResourceRequestCondition(Set<ApiVersion> versions, boolean fromMethod) {
+        this(versions, fromMethod, HEADER_VERSION);
+    }
+
+    /**
+     * Constructor that accepts a set of {@link ApiVersion} objects, a flag indicating
+     * whether the condition was declared at method level, and the request header name.
+     *
+     * @param versions   The set of {@link ApiVersion} objects to initialize the condition.
+     * @param fromMethod Whether this condition originates from a method-level annotation.
+     * @param headerName The request header that carries the API version.
+     */
+    public ApiVersionedResourceRequestCondition(Set<ApiVersion> versions, boolean fromMethod, String headerName) {
+        this.versions = Collections.unmodifiableSet(versions);
+        this.fromMethod = fromMethod;
+        this.headerName = headerName;
+    }
+
+    /**
+     * Constructor that accepts a collection of version strings, a flag indicating
+     * whether the condition was declared at method level, and the request header name.
+     *
+     * @param versions   The collection of version strings to initialize the condition.
+     * @param fromMethod Whether this condition originates from a method-level annotation.
+     * @param headerName The request header that carries the API version.
+     */
+    public ApiVersionedResourceRequestCondition(Collection<String> versions, boolean fromMethod, String headerName) {
+        this(toVersionSet(versions), fromMethod, headerName);
+    }
+
+    /**
+     * Combines this condition with another condition. If either condition was declared
+     * at method level, that condition takes precedence and is returned as-is. Otherwise
+     * the version sets are merged.
      *
      * @param other The other {@link ApiVersionedResourceRequestCondition} to combine with.
-     * @return A new {@link ApiVersionedResourceRequestCondition} containing the merged version set.
+     * @return A new {@link ApiVersionedResourceRequestCondition} containing the merged version set,
+     *         or the method-level condition if one is present.
      */
     @Override
     public ApiVersionedResourceRequestCondition combine(ApiVersionedResourceRequestCondition other) {
         LOG.debug("Combining:\n{}\n{}", this, other);
+        if (other.fromMethod) {
+            return other;
+        }
+        if (this.fromMethod) {
+            return this;
+        }
         Set<ApiVersion> newVersions = new LinkedHashSet<>(this.versions);
         newVersions.addAll(other.versions);
-        return new ApiVersionedResourceRequestCondition(newVersions);
+        return new ApiVersionedResourceRequestCondition(newVersions, false, headerName);
     }
 
     /**
      * Checks if the request matches any of the versions specified in this condition.
-     * It reads the version from the "Api-Version" header and matches it against the versions
+     * It reads the version from the configured header and matches it against the versions
      * in this condition. If no version header is present, the default API version is used.
      *
      * @param request The {@link HttpServletRequest} to match against.
@@ -75,8 +129,8 @@ public class ApiVersionedResourceRequestCondition extends AbstractRequestConditi
      */
     @Override
     public ApiVersionedResourceRequestCondition getMatchingCondition(HttpServletRequest request) {
-        final String header = request.getHeader(HEADER_VERSION);
-        LOG.debug("Api-Version header = {}", header);
+        final String header = request.getHeader(headerName);
+        LOG.debug("{} header = {}", headerName, header);
 
         var version = StringUtils.hasLength(header) ? ApiVersion.from(header) : ApiVersion.getDefaultVersion();
 
@@ -142,6 +196,7 @@ public class ApiVersionedResourceRequestCondition extends AbstractRequestConditi
 
     /**
      * Converts a collection of version strings into a set of {@link ApiVersion} objects.
+     * Each version string must be a registered API version.
      *
      * @param versions The collection of version strings to convert.
      * @return A set of {@link ApiVersion} objects.
@@ -150,9 +205,32 @@ public class ApiVersionedResourceRequestCondition extends AbstractRequestConditi
         Set<ApiVersion> result = new HashSet<>();
 
         for(String version : versions) {
-            result.add(ApiVersion.from(version));
+            result.add(resolve(version));
         }
 
         return result;
+    }
+
+    /**
+     * Resolves a version string to its registered {@link ApiVersion}. Fails fast if the
+     * string is not a valid ISO date or is not among the registered versions.
+     *
+     * @param version The version string to resolve.
+     * @return The matching {@link ApiVersion}.
+     * @throws IllegalArgumentException If the version is malformed or not registered.
+     */
+    private static ApiVersion resolve(String version) {
+        final LocalDate date;
+        try {
+            date = LocalDate.parse(version);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Invalid API version '" + version + "'. Versions must be ISO dates (yyyy-MM-dd).", ex);
+        }
+        ApiVersion resolved = ApiVersion.from(version);
+        if (resolved == null || !resolved.getVersionDate().equals(date)) {
+            throw new IllegalArgumentException(
+                "API version '" + version + "' is not a registered version. Registered versions: " + ApiVersion.getVersions());
+        }
+        return resolved;
     }
 }

@@ -21,6 +21,7 @@ class ApiVersionedResourceRequestConditionTest {
 
     @BeforeEach
     void setUp() {
+        ApiVersion.clear();
         v1 = new ApiVersion(LocalDate.of(2023, 1, 1));
         v2 = new ApiVersion(LocalDate.of(2024, 1, 1));
         ApiVersion.registerVersion(v1, false);
@@ -80,5 +81,40 @@ class ApiVersionedResourceRequestConditionTest {
 
         // Verify that default version is used when no version header is provided
         assertNotNull(defaultCondition);
+    }
+
+    @Test
+    void testCombine_MethodLevelOverridesTypeLevel() {
+        // Method-level condition must override the type-level condition
+        ApiVersionedResourceRequestCondition typeCondition = conditionV1;
+        ApiVersionedResourceRequestCondition methodCondition = new ApiVersionedResourceRequestCondition(
+            Collections.singleton(v2), true);
+
+        ApiVersionedResourceRequestCondition combined = typeCondition.combine(methodCondition);
+
+        assertEquals(v2, combined.getLatestVersion());
+    }
+
+    @Test
+    void testCustomHeaderName() {
+        HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        when(request.getHeader("X-API-Version")).thenReturn("2023-01-01");
+
+        ApiVersionedResourceRequestCondition condition = new ApiVersionedResourceRequestCondition(
+            Collections.singleton(v1), false, "X-API-Version");
+
+        assertNotNull(condition.getMatchingCondition(request));
+    }
+
+    @Test
+    void testUnregisteredVersion_FailsFast() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new ApiVersionedResourceRequestCondition(Collections.singletonList("2020-01-01")));
+    }
+
+    @Test
+    void testMalformedVersion_FailsFast() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new ApiVersionedResourceRequestCondition(Collections.singletonList("not-a-date")));
     }
 }
