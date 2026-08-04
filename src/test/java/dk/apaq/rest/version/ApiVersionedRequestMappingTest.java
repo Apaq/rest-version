@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.condition.RequestCondition;
 
 import java.lang.reflect.Method;
@@ -18,6 +19,7 @@ class ApiVersionedRequestMappingTest {
 
     @BeforeEach
     void setUp() {
+        ApiVersion.clear();
         handlerMapping = new ApiVersionedRequestMapping();
     }
 
@@ -52,6 +54,46 @@ class ApiVersionedRequestMappingTest {
         assertNull(condition);
     }
 
+    @Test
+    void testGetCustomMethodCondition_WithAnnotation() throws NoSuchMethodException {
+        ApiVersion.registerVersion(new ApiVersion("2023-01-01"), true);
+        ApiVersion.registerVersion(new ApiVersion("2024-01-01"), false);
+
+        Method method = MethodVersionedController.class.getMethod("get");
+
+        RequestCondition<?> condition = handlerMapping.getCustomMethodCondition(method);
+
+        assertNotNull(condition);
+        assertTrue(condition instanceof ApiVersionedResourceRequestCondition);
+
+        ApiVersionedResourceRequestCondition versionCondition = (ApiVersionedResourceRequestCondition) condition;
+        assertEquals("2024-01-01", versionCondition.getLatestVersion().getVersion());
+    }
+
+    @Test
+    void testMethodVersionOverridesTypeVersion() throws NoSuchMethodException {
+        ApiVersion.registerVersion(new ApiVersion("2023-01-01"), true);
+        ApiVersion.registerVersion(new ApiVersion("2024-01-01"), false);
+
+        RequestCondition<?> typeCondition = handlerMapping.getCustomTypeCondition(MethodVersionedController.class);
+        RequestCondition<?> methodCondition = handlerMapping.getCustomMethodCondition(
+            MethodVersionedController.class.getMethod("get"));
+
+        assertNotNull(typeCondition);
+        assertNotNull(methodCondition);
+
+        ApiVersionedResourceRequestCondition combined = ((ApiVersionedResourceRequestCondition) typeCondition)
+            .combine((ApiVersionedResourceRequestCondition) methodCondition);
+
+        assertEquals("2024-01-01", combined.getLatestVersion().getVersion());
+    }
+
+    @Test
+    void testCustomHeaderNameIsUsed() {
+        handlerMapping.setHeaderName("X-API-Version");
+        assertEquals("X-API-Version", handlerMapping.getHeaderName());
+    }
+
 
 
     // Mock controller with ApiVersionedResource annotation
@@ -80,5 +122,15 @@ class ApiVersionedRequestMappingTest {
     // Mock controller without ApiVersionedResource annotation
     private static class NonAnnotatedController {
 
+    }
+
+    // Mock controller with both a type-level and a method-level version
+    @ApiVersionedResource(version = "2023-01-01")
+    private static class MethodVersionedController {
+
+        @ApiVersionedResource(version = "2024-01-01", path = "/mocks", method = RequestMethod.GET)
+        public String get() {
+            return "mockv2";
+        }
     }
 }

@@ -5,13 +5,16 @@ import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * This class represents an API version, allowing for version registration, retrieval, and management.
  * Each version is associated with a specific date and can be identified by this date.
+ *
+ * <p>All supported versions must be registered at application startup, before the web context is
+ * built. The registry is thread-safe.</p>
  */
 public class ApiVersion {
 
@@ -19,18 +22,19 @@ public class ApiVersion {
     private static final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     // A list of registered API versions.
-    private static final List<ApiVersion> VERSIONS = new ArrayList<>();
+    private static final List<ApiVersion> VERSIONS = new CopyOnWriteArrayList<>();
 
     // Logger for this class.
     private final static Logger LOG = LoggerFactory.getLogger(ApiVersion.class);
 
     // The default API version. This is either the first registered version or a manually set version.
-    private static ApiVersion DEFAULT_VERSION;
+    private static volatile ApiVersion DEFAULT_VERSION;
 
     /**
      * Registers a new API version.
      *
      * @param version        The ApiVersion object to register.
+     * @throws IllegalArgumentException If the version is already registered.
      */
     public static void registerVersion(ApiVersion version) {
         ApiVersion.registerVersion(version, false);
@@ -41,13 +45,38 @@ public class ApiVersion {
      *
      * @param version        The ApiVersion object to register.
      * @param defaultVersion Whether this version should be the default version.
+     * @throws IllegalArgumentException If the version is already registered.
      */
     public static void registerVersion(ApiVersion version, boolean defaultVersion) {
+        if (version == null) {
+            throw new IllegalArgumentException("Version must not be null");
+        }
+        for (ApiVersion registered : VERSIONS) {
+            if (registered.getVersionDate().equals(version.getVersionDate())) {
+                throw new IllegalArgumentException("Version '" + version.getVersion() + "' is already registered");
+            }
+        }
         VERSIONS.add(version);
         // Set this version as the default if specified or if no default version is set.
         if(defaultVersion || DEFAULT_VERSION == null) {
             ApiVersion.DEFAULT_VERSION = version;
         }
+    }
+
+    /**
+     * Sets the default API version explicitly.
+     *
+     * @param version The ApiVersion object to use as the default.
+     * @throws IllegalArgumentException If the version is not registered.
+     */
+    public static void setDefaultVersion(ApiVersion version) {
+        if (version == null) {
+            throw new IllegalArgumentException("Version must not be null");
+        }
+        if (!VERSIONS.contains(version)) {
+            throw new IllegalArgumentException("Version '" + version.getVersion() + "' is not registered");
+        }
+        ApiVersion.DEFAULT_VERSION = version;
     }
 
     /**
@@ -144,7 +173,8 @@ public class ApiVersion {
 
     /**
      * Retrieves an ApiVersion that matches or is closest to the provided version string.
-     * If no exact match is found, the closest earlier version is returned.
+     * If no exact match is found, the closest earlier version is returned. If no registered
+     * version is earlier than the requested one, the first registered version is returned.
      *
      * @param version The version date string to match against.
      * @return The closest matching ApiVersion object.
@@ -152,16 +182,17 @@ public class ApiVersion {
     public static ApiVersion from(String version) {
         try {
             LocalDate date = LocalDate.parse(version);
-            ApiVersion apiVersion = getFirstVersion();
+            ApiVersion closest = null;
 
-            // Iterate through versions and find the closest match.
+            // Find the registered version that is not after the requested date and closest to it.
             for(ApiVersion current : VERSIONS) {
-                if(current.getVersionDate().isAfter(date)) {
-                    break;
+                if(!current.getVersionDate().isAfter(date)) {
+                    if(closest == null || current.getVersionDate().isAfter(closest.getVersionDate())) {
+                        closest = current;
+                    }
                 }
-                apiVersion = current;
             }
-            return apiVersion;
+            return closest != null ? closest : getFirstVersion();
         } catch (Exception ex) {
             // If parsing fails or no matching version is found, return the default version.
             return getDefaultVersion();
