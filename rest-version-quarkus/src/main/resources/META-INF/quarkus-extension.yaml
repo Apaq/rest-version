@@ -1,0 +1,11 @@
+name: "rest-version"
+description: "Header-based REST API versioning for Quarkus REST"
+metadata:
+  keywords:
+  - "rest"
+  - "api"
+  - "version"
+  - "versioning"
+  categories:
+  - "web"
+  status: "preview"
